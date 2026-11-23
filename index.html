@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1a73e8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Scanner Agenda">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%231a73e8'/%3E%3Crect x='96' y='112' width='320' height='304' rx='36' fill='%23ffffff'/%3E%3Crect x='96' y='112' width='320' height='84' rx='36' fill='%231557b0'/%3E%3Cpath d='M168 276l56 56 120-120' stroke='%231e8e3e' stroke-width='36' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+  <title>Scanner Agenda & Appunti v15</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    :root { --primary: #1a73e8; --bg: #f4f6f8; --card: #ffffff; --text: #202124; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; }
+    h1 { font-size: 1.3rem; margin-bottom: 12px; }
+    .card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+    button, .btn-label { display: block; box-sizing: border-box; text-align: center; background: var(--primary); color: white; border: none; padding: 12px 16px; border-radius: 8px; font-size: 1rem; font-weight: 600; width: 100%; cursor: pointer; margin-top: 8px; }
+    button.secondary, .btn-label.secondary { background: #e8f0fe; color: var(--primary); }
+    button.danger { background: #fce8e6; color: #d93025; }
+    button.success { background: #1e8e3e; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    input[type="text"], input[type="date"], input[type="time"], textarea { width: 100%; padding: 8px; margin: 4px 0 10px; border: 1px solid #dadce0; border-radius: 6px; box-sizing: border-box; font-size: 0.95rem; font-family: inherit; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab-btn { flex: 1; margin-top: 0; background: #e0e6ed; color: #3c4043; padding: 10px; font-size: 0.95rem; }
+    .tab-btn.active { background: var(--primary); color: #ffffff; }
+    .event-item { border-left: 4px solid var(--primary); padding-left: 12px; margin-bottom: 14px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+    .event-item.scadenza { border-left-color: #d93025; }
+    .event-item.personale { border-left-color: #8e24aa; }
+    .badge { display: inline-block; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; background: #e8f0fe; color: var(--primary); font-weight: 600; margin-bottom: 6px; }
+    .badge.scadenza { background: #fce8e6; color: #d93025; }
+    .badge.personale { background: #f3e5f5; color: #8e24aa; }
+    .mode-pill { display: inline-block; font-size: 0.75rem; padding: 3px 10px; border-radius: 12px; background: #e6f4ea; color: #137333; font-weight: 600; margin-bottom: 8px; }
+    .note-box { background: #fff8e1; border-left: 4px solid #f9ab00; padding: 10px 12px; border-radius: 6px; margin-bottom: 14px; font-size: 0.9rem; }
+    #preview { max-width: 100%; border-radius: 8px; margin-top: 10px; display: none; }
+    .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 10px; margin-top: 12px; }
+    .note-thumb { position: relative; border: 1px solid #dadce0; border-radius: 8px; overflow: hidden; background: #f8f9fa; text-align: center; }
+    .note-thumb img { width: 100%; height: 110px; object-fit: cover; display: block; }
+    .note-thumb span { display: block; font-size: 0.75rem; font-weight: 600; padding: 4px; color: #3c4043; }
+    .note-thumb button { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; padding: 0; margin: 0; border-radius: 50%; background: rgba(217,48,37,0.9); color: #fff; font-size: 0.8rem; line-height: 24px; }
+    .status { font-size: 0.9rem; color: #202124; margin-top: 10px; padding: 10px; background: #f1f3f4; border-radius: 8px; text-align: center; word-break: break-word; min-height: 20px; }
+    details summary { cursor: pointer; font-weight: 600; color: #5f6368; }
+  </style>
+</head>
+<body>
+
+  <h1>📅 Scanner Agenda & Appunti <span style="font-size:0.75rem; color:#1a73e8;">(v15)</span></h1>
+  <div id="jsErrorBox" style="display:none; background:#fce8e6; color:#d93025; padding:10px; border-radius:8px; margin-bottom:12px; font-size:0.85rem;"></div>
+
+  <div class="tabs">
+    <button type="button" id="tabAgenda" class="tab-btn active">📅 Agenda</button>
+    <button type="button" id="tabAppunti" class="tab-btn">📝 Appunti (Drive)</button>
+  </div>
+
+  <div class="card">
+    <details id="configDetails">
+      <summary>⚙️ Configurazione Chiavi & Cartella Drive</summary>
+      <div style="margin-top: 12px;">
+        <label>Gemini API Key:</label>
+        <input type="text" id="geminiKey" value="">
+        <label>Google OAuth Client ID:</label>
+        <input type="text" id="clientId" value="944286670464-d43mnompgnkg419s02hij2a102310is5.apps.googleusercontent.com">
+        <label>Nome Cartella Google Drive per Appunti:</label>
+        <input type="text" id="driveFolder" value="Appunti Scanner">
+        <button type="button" id="btnSalvaConfig" class="secondary">Salva Impostazioni</button>
+        <button type="button" id="btnTesta" class="secondary">🧪 Testa Connessione Chiave Gemini</button>
+        <div id="testStatus" class="status">Pronto per il test.</div>
+      </div>
+    </details>
+  </div>
+
+  <!-- SEZIONE AGENDA -->
+  <div id="sezioneAgenda">
+    <div class="card">
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+      <input type="file" id="galleryInput" accept="image/*" style="display:none">
+      <label for="cameraInput" class="btn-label">📷 Scatta Foto (Settimana o Giorno)</label>
+      <label for="galleryInput" class="btn-label secondary">🖼️ Scegli da Galleria / File</label>
+      <img id="preview" alt="Anteprima pagina">
+      <button type="button" id="btnAnalizza" class="secondary" style="display:none">🔍 Leggi Appuntamenti</button>
+      <div id="status" class="status">In attesa di scansione.</div>
+    </div>
+
+    <div id="risultatiCard" class="card" style="display:none">
+      <span id="badgeModalita" class="mode-pill">Vista rilevata</span>
+      <h2 id="titoloSettimana" style="font-size:1.1rem; margin-top:0;">Periodo rilevato</h2>
+      <div id="boxNoteGiorno" class="note-box" style="display:none">
+        <strong>📝 Note del giorno (allegate alla descrizione degli eventi):</strong>
+        <textarea id="testoNoteGiorno" rows="2" style="margin-top:6px; margin-bottom:0; background:#fff;"></textarea>
+      </div>
+      <div id="listaEventi"></div>
+      <button type="button" id="btnSalvaTutto" class="success">✅ Salva nell'App e su Google Calendar</button>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1.1rem; margin-top:0;">🗂️ Archivio Salvato nell'App</h2>
+      <div id="archivioLocale"><p style="color:#777; font-size:0.9rem;">Nessun evento salvato.</p></div>
+      <button type="button" id="btnSvuotaArchivio" class="danger" style="display:none; margin-top:12px; font-size:0.9rem; padding:10px;">🗑️ Svuota Archivio Locale</button>
+    </div>
+  </div>
+
+  <!-- SEZIONE APPUNTI MULTI-PAGINA -->
+  <div id="sezioneAppunti" style="display:none">
+    <div class="card">
+      <input type="file" id="notesCameraInput" accept="image/*" capture="environment" style="display:none">
+      <input type="file" id="notesGalleryInput" accept="image/*" multiple style="display:none">
+      <label for="notesCameraInput" class="btn-label">📷 Aggiungi Pagina Appunti (Fotocamera)</label>
+      <label for="notesGalleryInput" class="btn-label secondary">🖼️ Scegli Pagine da Galleria (anche multiple)</label>
+
+      <div id="notesQueueGrid" class="notes-grid"></div>
+
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button type="button" id="btnAnalizzaAppunti" class="secondary" style="display:none; flex:2;">🧠 Trascrivi e Riassumi (<span id="countPagine">0</span> pag.)</button>
+        <button type="button" id="btnPulisciAppunti" class="danger" style="display:none; flex:1; font-size:0.9rem;">Svuota</button>
+      </div>
+      <div id="notesStatus" class="status">Scatta una o più pagine della sezione Appunti del planner.</div>
+    </div>
+
+    <div id="risultatiAppuntiCard" class="card" style="display:none">
+      <span class="mode-pill">📄 Documento Pronto per Google Drive</span>
+      <label style="font-weight:600; font-size:0.9rem;">Titolo Documento:</label>
+      <input type="text" id="titoloDocAppunti" placeholder="Appunti Planner">
+
+      <label style="font-weight:600; font-size:0.9rem;">✨ Riassunto e Punti Chiave:</label>
+      <textarea id="riassuntoDocAppunti" rows="5"></textarea>
+
+      <label style="font-weight:600; font-size:0.9rem;">✍️ Trascrizione Completa:</label>
+      <textarea id="trascrizioneDocAppunti" rows="10"></textarea>
+
+      <button type="button" id="btnSalvaDrive" class="success">☁️ Salva su Google Drive (Google Docs)</button>
+      <div id="driveLinkBox" style="margin-top:10px; text-align:center; display:none;"></div>
+    </div>
+  </div>
+
+<script>
+  window.onerror = function(msg, url, line) {
+    var box = document.getElementById("jsErrorBox");
+    if (box) {
+      box.style.display = "block";
+      box.innerText = "Errore JS riga " + line + ": " + msg;
+    }
+  };
+
+  var MODELLI = ["gemini-3.5-flash-lite", "gemini-3.5-flash"];
+  var GOOGLE_SCOPES = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.file";
+
+  var base64Image = "";
+  var eventiEstratti = [];
+  var noteGiorno = "";
+  var pagineAppunti = [];
+  var tokenClient = null;
+  var accessToken = null;
+
+  function leggiStorage(chiave, fallback) {
+    try { return localStorage.getItem(chiave) || fallback; } catch (e) { return fallback; }
+  }
+
+  function scriviStorage(chiave, valore) {
+    try { localStorage.setItem(chiave, valore); } catch (e) {}
+  }
+
+  window.addEventListener("load", function() {
+    var kEl = document.getElementById("geminiKey");
+    var cEl = document.getElementById("clientId");
+    var fEl = document.getElementById("driveFolder");
+    kEl.value = leggiStorage("gemini_key", kEl.value);
+    cEl.value = leggiStorage("google_client_id", cEl.value);
+    fEl.value = leggiStorage("drive_folder_name", fEl.value);
+    mostraArchivio();
+
+    document.getElementById("tabAgenda").onclick = function() {
+      document.getElementById("tabAgenda").classList.add("active");
+      document.getElementById("tabAppunti").classList.remove("active");
+      document.getElementById("sezioneAgenda").style.display = "block";
+      document.getElementById("sezioneAppunti").style.display = "none";
+    };
+    document.getElementById("tabAppunti").onclick = function() {
+      document.getElementById("tabAppunti").classList.add("active");
+      document.getElementById("tabAgenda").classList.remove("active");
+      document.getElementById("sezioneAppunti").style.display = "block";
+      document.getElementById("sezioneAgenda").style.display = "none";
+    };
+
+    document.getElementById("btnSalvaConfig").onclick = function() {
+      scriviStorage("gemini_key", kEl.value.trim());
+      scriviStorage("google_client_id", cEl.value.trim());
+      scriviStorage("drive_folder_name", fEl.value.trim() || "Appunti Scanner");
+      document.getElementById("testStatus").innerText = "Impostazioni salvate!";
+    };
+
+    document.getElementById("btnTesta").onclick = testaChiave;
+
+    document.getElementById("cameraInput").onchange = gestisciImmagine;
+    document.getElementById("galleryInput").onchange = gestisciImmagine;
+    document.getElementById("btnAnalizza").onclick = analizzaImmagine;
+    document.getElementById("btnSalvaTutto").onclick = function() { richiediTokenEsegui(inviaAGoogleCalendar, "btnSalvaTutto"); };
+    document.getElementById("btnSvuotaArchivio").onclick = svuotaArchivio;
+
+    document.getElementById("notesCameraInput").onchange = aggiungiPagineAppunti;
+    document.getElementById("notesGalleryInput").onchange = aggiungiPagineAppunti;
+    document.getElementById("btnAnalizzaAppunti").onclick = analizzaAppunti;
+    document.getElementById("btnPulisciAppunti").onclick = pulisciCodaAppunti;
+    document.getElementById("btnSalvaDrive").onclick = function() { richiediTokenEsegui(salvaAppuntiSuDrive, "btnSalvaDrive"); };
+  });
+
+  function ridimensionaFile(file, maxDim, quality) {
+    return new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var img = new Image();
+        img.onload = function() {
+          var canvas = document.createElement("canvas");
+          var w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+            else { w = Math.round(w * maxDim / h); h = maxDim; }
+          }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          var dataUrl = canvas.toDataURL("image/jpeg", quality);
+          resolve({ dataUrl: dataUrl, base64: dataUrl.split(",")[1] });
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function chiamaSingoloModello(modello, apiKey, promptText, arrayBase64, timeoutMs, forceJson) {
+    var encodedKey = encodeURIComponent(apiKey);
+    var parts = [{ text: promptText }];
+    if (arrayBase64 && arrayBase64.length > 0) {
+      for (var i = 0; i < arrayBase64.length; i++) {
+        parts.push({ inline_data: { mime_type: "image/jpeg", data: arrayBase64[i] } });
+      }
+    }
+
+    var payload = { contents: [{ parts: parts }] };
+    if (forceJson) {
+      payload.generationConfig = { responseMimeType: "application/json" };
+    }
+
+    var controller = new AbortController();
+    var timer = setTimeout(function() { controller.abort(); }, timeoutMs || 30000);
+
+    try {
+      var res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + modello + ":generateContent?key=" + encodedKey, {
+        method: "POST",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      clearTimeout(timer);
+
+      var data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error ? (data.error.message + " (codice " + data.error.code + ")") : ("Errore HTTP " + res.status));
+      }
+      var candidate = data.candidates && data.candidates[0];
+      if (!candidate || !candidate.content || !candidate.content.parts || !candidate.content.parts[0]) {
+        var motivo = candidate && candidate.finishReason ? candidate.finishReason : "nessun contenuto";
+        throw new Error("Risposta vuota da Gemini (" + motivo + ")");
+      }
+      return candidate.content.parts[0].text || "";
+    } catch (err) {
+      clearTimeout(timer);
+      if (err.name === "AbortError") {
+        throw new Error("Timeout connessione su " + modello);
+      }
+      throw err;
+    }
+  }
+
+  async function chiamaGemini(apiKey, promptText, arrayBase64, statusElement, timeoutMs, forceJson) {
+    var ultimoErrore = null;
+    for (var i = 0; i < MODELLI.length; i++) {
+      try {
+        if (statusElement && i > 0) {
+          statusElement.innerText = "Cambio modello su " + MODELLI[i] + "...";
+        }
+        return await chiamaSingoloModello(MODELLI[i], apiKey, promptText, arrayBase64, timeoutMs, forceJson);
+      } catch (err) {
+        ultimoErrore = err;
+      }
+    }
+    throw ultimoErrore;
+  }
+
+  function estraiJsonSicuro(rawText) {
+    var pulito = (rawText || "").replace(/```json/gi, "").replace(/```/g, "").trim();
+    try {
+      return JSON.parse(pulito);
+    } catch (e) {
+      var jsonMatch = pulito.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          return JSON.parse(jsonMatch[0]);
+        } catch (e2) {}
+      }
+      throw new Error("Risposta non JSON: " + pulito.slice(0, 220));
+    }
+  }
+
+  async function testaChiave() {
+    var apiKey = document.getElementById("geminiKey").value.trim();
+    var out = document.getElementById("testStatus");
+    if (!apiKey) { out.innerText = "Inserisci prima la chiave nel campo sopra."; return; }
+    out.innerText = "Invio test a " + MODELLI[0] + "...";
+    try {
+      var risposta = await chiamaGemini(apiKey, "Rispondi solo con: OK", [], out, 20000, false);
+      out.innerText = "✅ Connessione riuscita! Risposta: " + risposta;
+    } catch (e) {
+      out.innerText = "❌ Errore: " + e.message;
+    }
+  }
+
+  function richiediTokenEsegui(azioneAsync, btnId) {
+    var clientId = document.getElementById("clientId").value.trim();
+    if (!clientId) { alert("Inserisci l'ID Client Google OAuth."); return; }
+
+    var btn = document.getElementById(btnId);
+    if (btn) btn.disabled = true;
+
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: GOOGLE_SCOPES,
+      callback: async function(tokenResponse) {
+        if (tokenResponse.access_token) {
+          accessToken = tokenResponse.access_token;
+          try {
+            await azioneAsync();
+          } catch (err) {
+            alert("Errore operazione Google: " + err.message);
+          }
+        }
+        if (btn) btn.disabled = false;
+      },
+      error_callback: function() {
+        if (btn) btn.disabled = false;
+      }
+    });
+    tokenClient.requestAccessToken();
+  }
+
+  // ==================== LOGICA AGENDA ====================
+  async function gestisciImmagine(event) {
+    var file = event.target.files[0];
+    if (!file) return;
+    document.getElementById("status").innerText = "Ridimensionamento foto...";
+    var res = await ridimensionaFile(file, 1100, 0.78);
+    document.getElementById("preview").src = res.dataUrl;
+    document.getElementById("preview").style.display = "block";
+    document.getElementById("btnAnalizza").style.display = "block";
+    document.getElementById("status").innerText = "Foto pronta. Premi Leggi Appuntamenti.";
+    base64Image = res.base64;
+    event.target.value = "";
+  }
+
+  async function analizzaImmagine() {
+    var apiKey = document.getElementById("geminiKey").value.trim();
+    if (!apiKey) { alert("Inserisci prima la Gemini API Key."); return; }
+
+    var status = document.getElementById("status");
+    var btn = document.getElementById("btnAnalizza");
+    btn.disabled = true;
+
+    var secondi = 0;
+    status.innerText = "Lettura pagina con Gemini... (0s)";
+    var timerVisivo = setInterval(function() {
+      secondi++;
+      status.innerText = "Lettura pagina con Gemini... (" + secondi + "s)";
+    }, 1000);
+
+    var prompt = "Analizza questa foto di un planner digitale e-ink (versione 2026 o 2027). Ignora eventuali tracce sbiadite (ghosting) della pagina precedente sullo sfondo e i menu laterali/superiori.\n" +
+      "Stabilisci prima il TIPO DI VISTA guardando in alto a sinistra:\n" +
+      "- CASO A (tipo_vista: 'settimanale'): se in alto a sinistra ce 'Settimana XX' e un intervallo di date (es. 23 Nov - 29 Nov 2026 oppure 07 Jun - 13 Jun 2027) per determinare l'anno esatto (2026 o 2027). La pagina ha 7 riquadri dei giorni: colonna sinistra (LUNEDI, MERCOLEDI, VENERDI, DOMENICA) e colonna destra (MARTEDI, GIOVEDI, SABATO). Ignora il riquadro 'OBIETTIVI SETTIMANALI' (sia se in basso a destra sia se affiancato a DOMENICA). Estrai tutti gli appuntamenti scritti a mano nei 7 giorni con categoria 'programma'.\n" +
+      "- CASO B (tipo_vista: 'giornaliera'): se in alto a sinistra ce il nome di un singolo giorno e la data completa (es. 'Martedi - 24 Novembre 2026' o 'Martedi - 8 Giugno 2027'). La pagina ha 4 sezioni:\n" +
+      "  1) 'PROGRAMMA' (a sinistra, griglia oraria 07:00-21:00): estrai ogni appuntamento scritto (categoria: 'programma'). Se e scritto un orario a mano accanto al testo (es. 8.30), usa quello; altrimenti usa l'ora della riga stampata su cui si trova. Se manca l'ora di fine, aggiungi 1 ora.\n" +
+      "  2) 'PERSONALE' (a destra al centro): estrai ogni impegno privato scritto qui (categoria: 'personale'). Se ha un orario usa tutto_il_giorno: false, altrimenti true.\n" +
+      "  3) 'PRIORITA' (a destra in alto con caselle di spunta): estrai SOLO le righe NON spuntate (ignora quelle con spunta/crocetta), con categoria: 'priorita' e tutto_il_giorno: true.\n" +
+      "  4) 'NOTE' (a destra in basso): trascrivi eventuale testo scritto a mano nel campo 'note_giorno' (stringa unica, vuota se non ce nulla).\n" +
+      "Regole generali: date in formato YYYY-MM-DD, orari in HH:MM. Se non ce orario imposta tutto_il_giorno: true. Se non ci sono appuntamenti scritti a mano, restituisci eventi: [].\n" +
+      "Restituisci un oggetto JSON con questa struttura esatta: " +
+      '{"tipo_vista":"settimanale","intestazione":"Settimana XX - Anno YYYY","note_giorno":"","eventi":[{"data":"YYYY-MM-DD","giorno":"LUNEDI","titolo":"Testo","categoria":"programma","ora_inizio":"09:00","ora_fine":"10:00","tutto_il_giorno":false}]}';
+
+    try {
+      var rawText = await chiamaGemini(apiKey, prompt, [base64Image], status, 30000, true);
+      clearInterval(timerVisivo);
+
+      var risultato = estraiJsonSicuro(rawText);
+      var isGiornaliera = (risultato.tipo_vista === "giornaliera");
+      document.getElementById("badgeModalita").innerText = isGiornaliera ? "📄 Vista Giornaliera" : "📅 Vista Settimanale";
+      document.getElementById("titoloSettimana").innerText = risultato.intestazione || risultato.settimana || "Eventi rilevati";
+
+      noteGiorno = (risultato.note_giorno || "").trim();
+      var boxNote = document.getElementById("boxNoteGiorno");
+      if (noteGiorno) {
+        document.getElementById("testoNoteGiorno").value = noteGiorno;
+        boxNote.style.display = "block";
+      } else {
+        document.getElementById("testoNoteGiorno").value = "";
+        boxNote.style.display = "none";
+      }
+
+      eventiEstratti = (risultato.eventi || []).map(function(ev) {
+        if (ev.categoria === "personale" && ev.titolo && ev.titolo.indexOf("[Personale]") === -1) {
+          ev.titolo = "[Personale] " + ev.titolo;
+        }
+        return ev;
+      });
+
+      renderizzaEventi();
+      status.innerText = "✅ Trovati " + eventiEstratti.length + " elementi (" + (isGiornaliera ? "giorno" : "settimana") + ") in " + secondi + "s.";
+    } catch (err) {
+      clearInterval(timerVisivo);
+      status.innerText = "❌ Errore: " + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function renderizzaEventi() {
+    var container = document.getElementById("listaEventi");
+    container.innerHTML = "";
+    if (eventiEstratti.length === 0) {
+      container.innerHTML = "<p>Nessun appuntamento o priorità rilevata in questa pagina.</p>";
+    }
+    eventiEstratti.forEach(function(ev, idx) {
+      var cat = ev.categoria || (ev.tutto_il_giorno ? "scadenza" : "programma");
+      var cls = "";
+      var labelBadge = "Appuntamento";
+
+      if (cat === "personale") {
+        cls = "personale";
+        labelBadge = ev.tutto_il_giorno ? "Personale (Tutto il giorno)" : "Personale";
+      } else if (cat === "priorita" || ev.tutto_il_giorno) {
+        cls = "scadenza";
+        labelBadge = cat === "priorita" ? "Priorità (Tutto il giorno)" : "Scadenza (Tutto il giorno)";
+      }
+
+      var timeInputs = "";
+      if (!ev.tutto_il_giorno) {
+        timeInputs = '<input type="time" value="' + (ev.ora_inizio || "09:00") + '" onchange="eventiEstratti[' + idx + '].ora_inizio = this.value">' +
+                     '<input type="time" value="' + (ev.ora_fine || "10:00") + '" onchange="eventiEstratti[' + idx + '].ora_fine = this.value">';
+      }
+      container.innerHTML +=
+        '<div class="event-item ' + cls + '">' +
+          '<span class="badge ' + cls + '">' + labelBadge + '</span>' +
+          '<input type="text" value="' + (ev.titolo || "").replace(/"/g, '&quot;') + '" onchange="eventiEstratti[' + idx + '].titolo = this.value">' +
+          '<div style="display:flex; gap:8px;">' +
+            '<input type="date" value="' + ev.data + '" onchange="eventiEstratti[' + idx + '].data = this.value">' +
+            timeInputs +
+          '</div>' +
+          '<button type="button" class="secondary" style="padding:6px; font-size:0.8rem;" onclick="rimuoviEvento(' + idx + ')">Rimuovi</button>' +
+        '</div>';
+    });
+    document.getElementById("risultatiCard").style.display = "block";
+  }
+
+  function rimuoviEvento(idx) {
+    eventiEstratti.splice(idx, 1);
+    renderizzaEventi();
+  }
+
+  function normalizzaTesto(str) {
+    return (str || "").replace(/^\[personale\]\s*/i, "").toLowerCase().trim().replace(/\s+/g, " ");
+  }
+
+  async function eventoGiaPresente(ev) {
+    var timeMin = encodeURIComponent(ev.data + "T00:00:00Z");
+    var timeMax = encodeURIComponent(ev.data + "T23:59:59Z");
+    var url = "https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=" + timeMin + "&timeMax=" + timeMax + "&singleEvents=true";
+
+    var res = await fetch(url, { headers: { "Authorization": "Bearer " + accessToken } });
+    if (!res.ok) return false;
+
+    var data = await res.json();
+    var items = data.items || [];
+    var titoloNuovo = normalizzaTesto(ev.titolo);
+
+    for (var i = 0; i < items.length; i++) {
+      if (normalizzaTesto(items[i].summary) === titoloNuovo) return true;
+    }
+    return false;
+  }
+
+  async function inviaAGoogleCalendar() {
+    var status = document.getElementById("status");
+    status.innerText = "Controllo duplicati e sincronizzazione con Google Calendar...";
+    var inseriti = 0;
+    var saltati = 0;
+    var archivio = JSON.parse(leggiStorage("archivio_agenda", "[]"));
+    var noteAttuali = (document.getElementById("testoNoteGiorno").value || "").trim();
+
+    for (var i = 0; i < eventiEstratti.length; i++) {
+      var ev = eventiEstratti[i];
+      status.innerText = "Verifica (" + (i + 1) + "/" + eventiEstratti.length + "): " + ev.titolo + "...";
+
+      if (await eventoGiaPresente(ev)) {
+        saltati++;
+        continue;
+      }
+
+      var bodyEvento = { summary: ev.titolo };
+      if (noteAttuali) bodyEvento.description = "Note del giorno:\n" + noteAttuali;
+
+      if (ev.tutto_il_giorno) {
+        var d = new Date(ev.data);
+        d.setDate(d.getDate() + 1);
+        bodyEvento.start = { date: ev.data };
+        bodyEvento.end = { date: d.toISOString().split("T")[0] };
+      } else {
+        bodyEvento.start = { dateTime: ev.data + "T" + ev.ora_inizio + ":00", timeZone: "Europe/Rome" };
+        bodyEvento.end = { dateTime: ev.data + "T" + ev.ora_fine + ":00", timeZone: "Europe/Rome" };
+      }
+
+      var res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + accessToken, "Content-Type": "application/json" },
+        body: JSON.stringify(bodyEvento)
+      });
+
+      if (res.ok) {
+        inseriti++;
+        archivio.push(ev);
+      }
+    }
+
+    scriviStorage("archivio_agenda", JSON.stringify(archivio));
+    mostraArchivio();
+
+    var msgFinale = "🎉 Fatto! " + inseriti + " nuovi eventi aggiunti";
+    if (saltati > 0) msgFinale += " (" + saltati + " già presenti saltati)";
+    status.innerText = msgFinale + ".";
+    document.getElementById("risultatiCard").style.display = "none";
+  }
+
+  function mostraArchivio() {
+    var archivio = JSON.parse(leggiStorage("archivio_agenda", "[]"));
+    var div = document.getElementById("archivioLocale");
+    var btnSvuota = document.getElementById("btnSvuotaArchivio");
+    if (archivio.length === 0) {
+      div.innerHTML = '<p style="color:#777; font-size:0.9rem;">Nessun evento salvato.</p>';
+      btnSvuota.style.display = "none";
+      return;
+    }
+    div.innerHTML = archivio.map(function(ev) {
+      return '<div style="padding:6px 0; border-bottom:1px solid #eee; font-size:0.9rem;">' +
+        '<strong>' + ev.data + '</strong> ' + (ev.tutto_il_giorno ? "(Tutto il giorno)" : ("(" + ev.ora_inizio + "-" + ev.ora_fine + ")")) + ' - ' + ev.titolo +
+      '</div>';
+    }).join("");
+    btnSvuota.style.display = "block";
+  }
+
+  function svuotaArchivio() {
+    if (!confirm("Vuoi svuotare la cronologia salvata nell'app? (Gli eventi su Google Calendar resteranno intatti)")) return;
+    scriviStorage("archivio_agenda", "[]");
+    mostraArchivio();
+  }
+
+  // ==================== LOGICA APPUNTI MULTI-PAGINA ====================
+  async function aggiungiPagineAppunti(event) {
+    var files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    var status = document.getElementById("notesStatus");
+    status.innerText = "Preparazione di " + files.length + " immagine/i...";
+
+    for (var i = 0; i < files.length; i++) {
+      var res = await ridimensionaFile(files[i], 1200, 0.78);
+      pagineAppunti.push(res);
+    }
+
+    event.target.value = "";
+    renderizzaCodaAppunti();
+    status.innerText = "Pronte " + pagineAppunti.length + " pagine. Puoi aggiungerne altre o avviare la trascrizione.";
+  }
+
+  function renderizzaCodaAppunti() {
+    var grid = document.getElementById("notesQueueGrid");
+    var btnAnalizza = document.getElementById("btnAnalizzaAppunti");
+    var btnPulisci = document.getElementById("btnPulisciAppunti");
+    document.getElementById("countPagine").innerText = pagineAppunti.length;
+
+    if (pagineAppunti.length === 0) {
+      grid.innerHTML = "";
+      btnAnalizza.style.display = "none";
+      btnPulisci.style.display = "none";
+      return;
+    }
+
+    grid.innerHTML = pagineAppunti.map(function(p, idx) {
+      return '<div class="note-thumb">' +
+        '<button type="button" onclick="rimuoviPaginaAppunti(' + idx + ')">✕</button>' +
+        '<img src="' + p.dataUrl + '" alt="Pagina ' + (idx + 1) + '">' +
+        '<span>Pagina ' + (idx + 1) + '</span>' +
+      '</div>';
+    }).join("");
+
+    btnAnalizza.style.display = "block";
+    btnPulisci.style.display = "block";
+  }
+
+  function rimuoviPaginaAppunti(idx) {
+    pagineAppunti.splice(idx, 1);
+    renderizzaCodaAppunti();
+    document.getElementById("notesStatus").innerText = pagineAppunti.length > 0
+      ? ("Rimaste " + pagineAppunti.length + " pagine in coda.")
+      : "Coda svuotata.";
+  }
+
+  function pulisciCodaAppunti() {
+    pagineAppunti = [];
+    renderizzaCodaAppunti();
+    document.getElementById("risultatiAppuntiCard").style.display = "none";
+    document.getElementById("notesStatus").innerText = "Coda appunti svuotata.";
+  }
+
+  async function analizzaAppunti() {
+    var apiKey = document.getElementById("geminiKey").value.trim();
+    if (!apiKey) { alert("Inserisci prima la Gemini API Key."); return; }
+    if (pagineAppunti.length === 0) return;
+
+    var status = document.getElementById("notesStatus");
+    var btn = document.getElementById("btnAnalizzaAppunti");
+    btn.disabled = true;
+    document.getElementById("driveLinkBox").style.display = "none";
+
+    var secondi = 0;
+    status.innerText = "Trascrizione e sintesi di " + pagineAppunti.length + " pagine con Gemini... (0s)";
+    var timerVisivo = setInterval(function() {
+      secondi++;
+      status.innerText = "Trascrizione e sintesi di " + pagineAppunti.length + " pagine con Gemini... (" + secondi + "s)";
+    }, 1000);
+
+    var prompt = "Ti invio " + pagineAppunti.length + " foto in sequenza della sezione Appunti di un planner digitale e-ink. Ignora eventuali tracce sbiadite (ghosting) dello sfondo e i menu laterali/superiori.\n" +
+      "1. Leggi attentamente tutta la scrittura a mano in ordine sequenziale dalla prima all'ultima immagine.\n" +
+      "2. Crea un titolo sintetico e descrittivo (includendo eventuale data o argomento presente negli appunti).\n" +
+      "3. Scrivi un RIASSUNTO strutturato con i concetti principali e gli eventuali punti d'azione/decisioni emersi.\n" +
+      "4. Scrivi la TRASCRIZIONE completa e fedele di tutto il testo, organizzata per pagina (es. --- Pagina 1 ---) e ben formattata.\n" +
+      "Restituisci un oggetto JSON con questa struttura esatta: " +
+      '{"titolo":"Titolo Appunti","riassunto":"Testo del riassunto","trascrizione":"Testo completo trascritto"}';
+
+    var arrayB64 = pagineAppunti.map(function(p) { return p.base64; });
+
+    try {
+      var rawText = await chiamaGemini(apiKey, prompt, arrayB64, status, 45000, true);
+      clearInterval(timerVisivo);
+
+      var risultato = estraiJsonSicuro(rawText);
+      var oggi = new Date().toISOString().split("T")[0];
+      document.getElementById("titoloDocAppunti").value = (risultato.titolo || ("Appunti " + oggi));
+      document.getElementById("riassuntoDocAppunti").value = risultato.riassunto || "";
+      document.getElementById("trascrizioneDocAppunti").value = risultato.trascrizione || "";
+
+      document.getElementById("risultatiAppuntiCard").style.display = "block";
+      status.innerText = "✅ Elaborate " + pagineAppunti.length + " pagine in " + secondi + "s. Controlla e salva su Drive.";
+    } catch (err) {
+      clearInterval(timerVisivo);
+      status.innerText = "❌ Errore: " + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function ottieniOCreaCartellaDrive(nomeCartella) {
+    var query = encodeURIComponent("name = '" + nomeCartella.replace(/'/g, "\\'") + "' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+    var res = await fetch("https://www.googleapis.com/drive/v3/files?q=" + query + "&fields=files(id,name)", {
+      headers: { "Authorization": "Bearer " + accessToken }
+    });
+    if (!res.ok) throw new Error("Impossibile cercare cartelle su Drive (" + res.status + ")");
+
+    var data = await res.json();
+    if (data.files && data.files.length > 0) {
+      return data.files[0].id;
+    }
+
+    var createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + accessToken,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name: nomeCartella,
+        mimeType: "application/vnd.google-apps.folder"
+      })
+    });
+    if (!createRes.ok) throw new Error("Impossibile creare la cartella su Drive (" + createRes.status + ")");
+    var folderData = await createRes.json();
+    return folderData.id;
+  }
+
+  function escapeHtml(str) {
+    return (str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\n/g, "<br>");
+  }
+
+  async function salvaAppuntiSuDrive() {
+    var status = document.getElementById("notesStatus");
+    var nomeCartella = document.getElementById("driveFolder").value.trim() || "Appunti Scanner";
+    var titolo = document.getElementById("titoloDocAppunti").value.trim() || ("Appunti_" + new Date().toISOString().split("T")[0]);
+    var riassunto = document.getElementById("riassuntoDocAppunti").value.trim();
+    var trascrizione = document.getElementById("trascrizioneDocAppunti").value.trim();
+
+    status.innerText = "Accesso a Google Drive e ricerca cartella '" + nomeCartella + "'...";
+    var folderId = await ottieniOCreaCartellaDrive(nomeCartella);
+
+    status.innerText = "Creazione documento Google Docs in corso...";
+    var htmlBody =
+      "<html><body style='font-family:Arial,sans-serif;line-height:1.5;'>" +
+      "<h1>" + escapeHtml(titolo) + "</h1>" +
+      "<p style='color:#666;font-size:12px;'>Generato da Scanner Agenda &amp; Appunti il " + new Date().toLocaleDateString("it-IT") + "</p>" +
+      "<h2>Riassunto e Punti Chiave</h2>" +
+      "<p>" + escapeHtml(riassunto) + "</p>" +
+      "<hr>" +
+      "<h2>Trascrizione Completa</h2>" +
+      "<p>" + escapeHtml(trascrizione) + "</p>" +
+      "</body></html>";
+
+    var metadata = {
+      name: titolo,
+      mimeType: "application/vnd.google-apps.document",
+      parents: [folderId]
+    };
+
+    var boundary = "-------314159265358979323846";
+    var delimiter = "\r\n--" + boundary + "\r\n";
+    var closeDelim = "\r\n--" + boundary + "--";
+
+    var multipartRequestBody =
+      delimiter +
+      "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+      JSON.stringify(metadata) +
+      delimiter +
+      "Content-Type: text/html; charset=UTF-8\r\n\r\n" +
+      htmlBody +
+      closeDelim;
+
+    var uploadRes = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + accessToken,
+        "Content-Type": "multipart/related; boundary=\"" + boundary + "\""
+      },
+      body: multipartRequestBody
+    });
+
+    if (!uploadRes.ok) {
+      var errTxt = await uploadRes.text();
+      throw new Error("Errore upload Drive (" + uploadRes.status + "): " + errTxt);
+    }
+
+    var fileInfo = await uploadRes.json();
+    status.innerText = "🎉 Salvato su Google Drive nella cartella '" + nomeCartella + "'!";
+    var linkBox = document.getElementById("driveLinkBox");
+    if (fileInfo.webViewLink) {
+      linkBox.innerHTML = '<a href="' + fileInfo.webViewLink + '" target="_blank" style="color:#1a73e8; font-weight:600; text-decoration:none;">📄 Apri Documento su Google Drive</a>';
+      linkBox.style.display = "block";
+    }
+  }
+</script>
+</body>
+</html>
