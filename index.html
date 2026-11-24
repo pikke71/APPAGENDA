@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Scanner Agenda">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%231a73e8'/%3E%3Crect x='96' y='112' width='320' height='304' rx='36' fill='%23ffffff'/%3E%3Crect x='96' y='112' width='320' height='84' rx='36' fill='%231557b0'/%3E%3Cpath d='M168 276l56 56 120-120' stroke='%231e8e3e' stroke-width='36' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
-  <title>Scanner Agenda & Appunti v16</title>
+  <title>Scanner Agenda & Appunti v17</title>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root { --primary: #1a73e8; --bg: #f4f6f8; --card: #ffffff; --text: #202124; }
@@ -33,6 +33,8 @@
     .badge.personale { background: #f3e5f5; color: #8e24aa; }
     .mode-pill { display: inline-block; font-size: 0.75rem; padding: 3px 10px; border-radius: 12px; background: #e6f4ea; color: #137333; font-weight: 600; margin-bottom: 8px; }
     .note-box { background: #fff8e1; border-left: 4px solid #f9ab00; padding: 10px 12px; border-radius: 6px; margin-bottom: 14px; font-size: 0.9rem; }
+    .dup-banner { background: #f1f3f4; border-left: 4px solid #5f6368; padding: 10px 12px; border-radius: 6px; margin-bottom: 14px; font-size: 0.85rem; color: #3c4043; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .dup-banner button { width: auto; margin: 0; padding: 6px 10px; font-size: 0.8rem; }
     .tasks-box { background: #e8f0fe; border-left: 4px solid #1a73e8; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
     .task-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
     .task-row input { margin: 0; background: #fff; }
@@ -49,7 +51,7 @@
 </head>
 <body>
 
-  <h1>📅 Scanner Agenda & Appunti <span style="font-size:0.75rem; color:#1a73e8;">(v16)</span></h1>
+  <h1>📅 Scanner Agenda & Appunti <span style="font-size:0.75rem; color:#1a73e8;">(v17)</span></h1>
   <div id="jsErrorBox" style="display:none; background:#fce8e6; color:#d93025; padding:10px; border-radius:8px; margin-bottom:12px; font-size:0.85rem;"></div>
 
   <div class="tabs">
@@ -91,6 +93,11 @@
     <div id="risultatiCard" class="card" style="display:none">
       <span id="badgeModalita" class="mode-pill">Vista rilevata</span>
       <h2 id="titoloSettimana" style="font-size:1.1rem; margin-top:0;">Periodo rilevato</h2>
+
+      <div id="boxDuplicatiNascosti" class="dup-banner" style="display:none">
+        <span id="testoDuplicatiNascosti"></span>
+        <button type="button" id="btnRipristinaDuplicati" class="secondary">Mostra comunque</button>
+      </div>
 
       <div id="boxNoteGiorno" class="note-box" style="display:none">
         <strong>📝 Note del giorno (allegate alla descrizione degli eventi):</strong>
@@ -164,6 +171,7 @@
 
   var base64Image = "";
   var eventiEstratti = [];
+  var eventiNascostiGiaSalvati = [];
   var obiettiviSettimanali = [];
   var dataScadenzaObiettivi = "";
   var noteGiorno = "";
@@ -216,6 +224,7 @@
     document.getElementById("cameraInput").onchange = gestisciImmagine;
     document.getElementById("galleryInput").onchange = gestisciImmagine;
     document.getElementById("btnAnalizza").onclick = analizzaImmagine;
+    document.getElementById("btnRipristinaDuplicati").onclick = ripristinaDuplicatiNascosti;
     document.getElementById("btnSalvaTutto").onclick = function() { richiediTokenEsegui(sincronizzaTutto, "btnSalvaTutto"); };
     document.getElementById("btnSvuotaArchivio").onclick = svuotaArchivio;
 
@@ -367,6 +376,48 @@
     tokenClient.requestAccessToken();
   }
 
+  // ==================== CONFRONTO ANTI-DUPLICATI ====================
+  function estraiParoleChiave(str) {
+    return (str || "")
+      .replace(/^\[personale\]\s*/i, "")
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(function(w) { return w.length > 2; });
+  }
+
+  function titoliSimili(titoloA, titoloB) {
+    var normA = (titoloA || "").replace(/^\[personale\]\s*/i, "").toLowerCase().trim();
+    var normB = (titoloB || "").replace(/^\[personale\]\s*/i, "").toLowerCase().trim();
+    if (!normA || !normB) return false;
+    if (normA === normB || normA.indexOf(normB) !== -1 || normB.indexOf(normA) !== -1) return true;
+
+    var wA = estraiParoleChiave(normA);
+    var wB = estraiParoleChiave(normB);
+    if (wA.length === 0 || wB.length === 0) return false;
+
+    var comuni = 0;
+    for (var i = 0; i < wA.length; i++) {
+      if (wB.indexOf(wA[i]) !== -1) comuni++;
+    }
+    var minLen = Math.min(wA.length, wB.length);
+    return (comuni / minLen) >= 0.65;
+  }
+
+  function giaInArchivioLocale(ev, archivio) {
+    for (var i = 0; i < archivio.length; i++) {
+      var salvato = archivio[i];
+      if (salvato.data !== ev.data) continue;
+      if (titoliSimili(salvato.titolo, ev.titolo)) return true;
+      if (!ev.tutto_il_giorno && !salvato.tutto_il_giorno && salvato.ora_inizio === ev.ora_inizio && titoliSimili(salvato.titolo, ev.titolo)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // ==================== LOGICA AGENDA & TASKS ====================
   async function gestisciImmagine(event) {
     var file = event.target.files[0];
@@ -433,21 +484,58 @@
       dataScadenzaObiettivi = risultato.data_domenica || "";
       renderizzaObiettivi();
 
-      eventiEstratti = (risultato.eventi || []).map(function(ev) {
+      var tuttiEventi = (risultato.eventi || []).map(function(ev) {
         if (ev.categoria === "personale" && ev.titolo && ev.titolo.indexOf("[Personale]") === -1) {
           ev.titolo = "[Personale] " + ev.titolo;
         }
         return ev;
       });
 
+      // Filtra subito quelli già salvati nell'archivio locale del dispositivo
+      var archivio = JSON.parse(leggiStorage("archivio_agenda", "[]"));
+      eventiEstratti = [];
+      eventiNascostiGiaSalvati = [];
+
+      for (var i = 0; i < tuttiEventi.length; i++) {
+        if (giaInArchivioLocale(tuttiEventi[i], archivio)) {
+          eventiNascostiGiaSalvati.push(tuttiEventi[i]);
+        } else {
+          eventiEstratti.push(tuttiEventi[i]);
+        }
+      }
+
+      aggiornaBannerDuplicati();
       renderizzaEventi();
-      status.innerText = "✅ Trovati " + eventiEstratti.length + " eventi e " + obiettiviSettimanali.length + " obiettivi in " + secondi + "s.";
+
+      var msg = "✅ " + eventiEstratti.length + " nuovi eventi e " + obiettiviSettimanali.length + " obiettivi";
+      if (eventiNascostiGiaSalvati.length > 0) {
+        msg += " (" + eventiNascostiGiaSalvati.length + " già salvati filtrati)";
+      }
+      status.innerText = msg + " in " + secondi + "s.";
     } catch (err) {
       clearInterval(timerVisivo);
       status.innerText = "❌ Errore: " + err.message;
     } finally {
       btn.disabled = false;
     }
+  }
+
+  function aggiornaBannerDuplicati() {
+    var box = document.getElementById("boxDuplicatiNascosti");
+    var txt = document.getElementById("testoDuplicatiNascosti");
+    if (eventiNascostiGiaSalvati.length > 0) {
+      txt.innerText = "🙈 " + eventiNascostiGiaSalvati.length + " appuntament" + (eventiNascostiGiaSalvati.length === 1 ? "o già salvato in precedenza è stato nascosto" : "i già salvati in precedenza sono stati nascosti") + ".";
+      box.style.display = "flex";
+    } else {
+      box.style.display = "none";
+    }
+  }
+
+  function ripristinaDuplicatiNascosti() {
+    eventiEstratti = eventiEstratti.concat(eventiNascostiGiaSalvati);
+    eventiNascostiGiaSalvati = [];
+    aggiornaBannerDuplicati();
+    renderizzaEventi();
   }
 
   function renderizzaObiettivi() {
@@ -480,7 +568,7 @@
     var container = document.getElementById("listaEventi");
     container.innerHTML = "";
     if (eventiEstratti.length === 0) {
-      container.innerHTML = "<p>Nessun appuntamento rilevato nei riquadri giornalieri.</p>";
+      container.innerHTML = "<p style='color:#5f6368; font-size:0.9rem;'>Nessun nuovo appuntamento da aggiungere.</p>";
     }
     eventiEstratti.forEach(function(ev, idx) {
       var cat = ev.categoria || (ev.tutto_il_giorno ? "scadenza" : "programma");
@@ -519,36 +607,6 @@
     renderizzaEventi();
   }
 
-  // ==================== ANTI-DUPLICATI INTELLIGENTE ====================
-  function estraiParoleChiave(str) {
-    return (str || "")
-      .replace(/^\[personale\]\s*/i, "")
-      .toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9\s]/g, " ")
-      .trim()
-      .split(/\s+/)
-      .filter(function(w) { return w.length > 2; });
-  }
-
-  function titoliSimili(titoloA, titoloB) {
-    var normA = (titoloA || "").replace(/^\[personale\]\s*/i, "").toLowerCase().trim();
-    var normB = (titoloB || "").replace(/^\[personale\]\s*/i, "").toLowerCase().trim();
-    if (!normA || !normB) return false;
-    if (normA === normB || normA.indexOf(normB) !== -1 || normB.indexOf(normA) !== -1) return true;
-
-    var wA = estraiParoleChiave(normA);
-    var wB = estraiParoleChiave(normB);
-    if (wA.length === 0 || wB.length === 0) return false;
-
-    var comuni = 0;
-    for (var i = 0; i < wA.length; i++) {
-      if (wB.indexOf(wA[i]) !== -1) comuni++;
-    }
-    var minLen = Math.min(wA.length, wB.length);
-    return (comuni / minLen) >= 0.7;
-  }
-
   function spostaGiorni(dataStr, delta) {
     var parts = dataStr.split("-");
     var d = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)));
@@ -556,8 +614,7 @@
     return d.toISOString().split("T")[0];
   }
 
-  async function eventoGiaPresente(ev) {
-    // Finestra ampia per coprire fuso orario locale Europe/Rome senza tagliare eventi ai bordi
+  async function eventoGiaPresenteSuGoogle(ev) {
     var giornoPrima = spostaGiorni(ev.data, -1);
     var giornoDopo = spostaGiorni(ev.data, 1);
     var timeMin = encodeURIComponent(giornoPrima + "T21:00:00Z");
@@ -573,24 +630,13 @@
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
       var itemData = "";
-      var itemOra = "";
-
       if (item.start && item.start.date) {
         itemData = item.start.date;
       } else if (item.start && item.start.dateTime) {
         itemData = item.start.dateTime.slice(0, 10);
-        itemOra = item.start.dateTime.slice(11, 16);
       }
-
       if (itemData !== ev.data) continue;
-
-      // 1) Controllo somiglianza testo (anche se trascritto leggermente diverso)
       if (titoliSimili(item.summary, ev.titolo)) return true;
-
-      // 2) Se è un evento con orario e sullo stesso giorno c'è già un appuntamento identico alla stessa ora
-      if (!ev.tutto_il_giorno && itemOra && itemOra === ev.ora_inizio && titoliSimili(item.summary, ev.titolo)) {
-        return true;
-      }
     }
     return false;
   }
@@ -632,7 +678,6 @@
     status.innerText = "Sincronizzazione Obiettivi con Google Tasks ('" + nomeLista + "')...";
     var listId = await ottieniOCreaTaskList(nomeLista);
 
-    // Leggi i task esistenti non completati per evitare duplicati
     var existingRes = await fetch("https://tasks.googleapis.com/tasks/v1/lists/" + encodeURIComponent(listId) + "/tasks?showCompleted=false", {
       headers: { "Authorization": "Bearer " + accessToken }
     });
@@ -694,7 +739,8 @@
       var ev = eventiEstratti[i];
       status.innerText = "Verifica evento (" + (i + 1) + "/" + eventiEstratti.length + "): " + ev.titolo + "...";
 
-      if (await eventoGiaPresente(ev)) {
+      if (giaInArchivioLocale(ev, archivio) || await eventoGiaPresenteSuGoogle(ev)) {
+        if (!giaInArchivioLocale(ev, archivio)) archivio.push(ev);
         saltati++;
         continue;
       }
