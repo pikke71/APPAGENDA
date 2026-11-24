@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Scanner Agenda">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%231a73e8'/%3E%3Crect x='96' y='112' width='320' height='304' rx='36' fill='%23ffffff'/%3E%3Crect x='96' y='112' width='320' height='84' rx='36' fill='%231557b0'/%3E%3Cpath d='M168 276l56 56 120-120' stroke='%231e8e3e' stroke-width='36' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
-  <title>Scanner Agenda & Appunti v15</title>
+  <title>Scanner Agenda & Appunti v16</title>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root { --primary: #1a73e8; --bg: #f4f6f8; --card: #ffffff; --text: #202124; }
@@ -33,6 +33,10 @@
     .badge.personale { background: #f3e5f5; color: #8e24aa; }
     .mode-pill { display: inline-block; font-size: 0.75rem; padding: 3px 10px; border-radius: 12px; background: #e6f4ea; color: #137333; font-weight: 600; margin-bottom: 8px; }
     .note-box { background: #fff8e1; border-left: 4px solid #f9ab00; padding: 10px 12px; border-radius: 6px; margin-bottom: 14px; font-size: 0.9rem; }
+    .tasks-box { background: #e8f0fe; border-left: 4px solid #1a73e8; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+    .task-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+    .task-row input { margin: 0; background: #fff; }
+    .task-row button { width: 34px; height: 34px; margin: 0; padding: 0; flex-shrink: 0; }
     #preview { max-width: 100%; border-radius: 8px; margin-top: 10px; display: none; }
     .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 10px; margin-top: 12px; }
     .note-thumb { position: relative; border: 1px solid #dadce0; border-radius: 8px; overflow: hidden; background: #f8f9fa; text-align: center; }
@@ -45,24 +49,26 @@
 </head>
 <body>
 
-  <h1>📅 Scanner Agenda & Appunti <span style="font-size:0.75rem; color:#1a73e8;">(v15)</span></h1>
+  <h1>📅 Scanner Agenda & Appunti <span style="font-size:0.75rem; color:#1a73e8;">(v16)</span></h1>
   <div id="jsErrorBox" style="display:none; background:#fce8e6; color:#d93025; padding:10px; border-radius:8px; margin-bottom:12px; font-size:0.85rem;"></div>
 
   <div class="tabs">
-    <button type="button" id="tabAgenda" class="tab-btn active">📅 Agenda</button>
+    <button type="button" id="tabAgenda" class="tab-btn active">📅 Agenda & Tasks</button>
     <button type="button" id="tabAppunti" class="tab-btn">📝 Appunti (Drive)</button>
   </div>
 
   <div class="card">
     <details id="configDetails">
-      <summary>⚙️ Configurazione Chiavi & Cartella Drive</summary>
+      <summary>⚙️ Configurazione Chiavi, Drive & Tasks</summary>
       <div style="margin-top: 12px;">
         <label>Gemini API Key:</label>
-        <input type="text" id="geminiKey" value="">
+        <input type="text" id="geminiKey" value="" placeholder="Incolla qui la tua Gemini API Key">
         <label>Google OAuth Client ID:</label>
         <input type="text" id="clientId" value="944286670464-d43mnompgnkg419s02hij2a102310is5.apps.googleusercontent.com">
         <label>Nome Cartella Google Drive per Appunti:</label>
         <input type="text" id="driveFolder" value="Appunti Scanner">
+        <label>Nome Lista Google Tasks per Obiettivi:</label>
+        <input type="text" id="tasksListName" value="Obiettivi Settimanali">
         <button type="button" id="btnSalvaConfig" class="secondary">Salva Impostazioni</button>
         <button type="button" id="btnTesta" class="secondary">🧪 Testa Connessione Chiave Gemini</button>
         <div id="testStatus" class="status">Pronto per il test.</div>
@@ -70,7 +76,7 @@
     </details>
   </div>
 
-  <!-- SEZIONE AGENDA -->
+  <!-- SEZIONE AGENDA & TASKS -->
   <div id="sezioneAgenda">
     <div class="card">
       <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
@@ -78,19 +84,30 @@
       <label for="cameraInput" class="btn-label">📷 Scatta Foto (Settimana o Giorno)</label>
       <label for="galleryInput" class="btn-label secondary">🖼️ Scegli da Galleria / File</label>
       <img id="preview" alt="Anteprima pagina">
-      <button type="button" id="btnAnalizza" class="secondary" style="display:none">🔍 Leggi Appuntamenti</button>
+      <button type="button" id="btnAnalizza" class="secondary" style="display:none">🔍 Leggi Appuntamenti & Obiettivi</button>
       <div id="status" class="status">In attesa di scansione.</div>
     </div>
 
     <div id="risultatiCard" class="card" style="display:none">
       <span id="badgeModalita" class="mode-pill">Vista rilevata</span>
       <h2 id="titoloSettimana" style="font-size:1.1rem; margin-top:0;">Periodo rilevato</h2>
+
       <div id="boxNoteGiorno" class="note-box" style="display:none">
         <strong>📝 Note del giorno (allegate alla descrizione degli eventi):</strong>
         <textarea id="testoNoteGiorno" rows="2" style="margin-top:6px; margin-bottom:0; background:#fff;"></textarea>
       </div>
+
+      <!-- RIQUADRO OBIETTIVI SETTIMANALI (GOOGLE TASKS) -->
+      <div id="boxObiettiviSettimanali" class="tasks-box" style="display:none">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <strong style="color:#1557b0; font-size:0.95rem;">🎯 Obiettivi Settimanali (→ Google Tasks)</strong>
+          <span id="labelScadenzaTasks" style="font-size:0.75rem; color:#5f6368;"></span>
+        </div>
+        <div id="listaObiettivi"></div>
+      </div>
+
       <div id="listaEventi"></div>
-      <button type="button" id="btnSalvaTutto" class="success">✅ Salva nell'App e su Google Calendar</button>
+      <button type="button" id="btnSalvaTutto" class="success">✅ Sincronizza con Calendar & Google Tasks</button>
     </div>
 
     <div class="card">
@@ -143,10 +160,12 @@
   };
 
   var MODELLI = ["gemini-3.5-flash-lite", "gemini-3.5-flash"];
-  var GOOGLE_SCOPES = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.file";
+  var GOOGLE_SCOPES = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/tasks";
 
   var base64Image = "";
   var eventiEstratti = [];
+  var obiettiviSettimanali = [];
+  var dataScadenzaObiettivi = "";
   var noteGiorno = "";
   var pagineAppunti = [];
   var tokenClient = null;
@@ -164,9 +183,11 @@
     var kEl = document.getElementById("geminiKey");
     var cEl = document.getElementById("clientId");
     var fEl = document.getElementById("driveFolder");
+    var tEl = document.getElementById("tasksListName");
     kEl.value = leggiStorage("gemini_key", kEl.value);
     cEl.value = leggiStorage("google_client_id", cEl.value);
     fEl.value = leggiStorage("drive_folder_name", fEl.value);
+    tEl.value = leggiStorage("tasks_list_name", tEl.value);
     mostraArchivio();
 
     document.getElementById("tabAgenda").onclick = function() {
@@ -186,6 +207,7 @@
       scriviStorage("gemini_key", kEl.value.trim());
       scriviStorage("google_client_id", cEl.value.trim());
       scriviStorage("drive_folder_name", fEl.value.trim() || "Appunti Scanner");
+      scriviStorage("tasks_list_name", tEl.value.trim() || "Obiettivi Settimanali");
       document.getElementById("testStatus").innerText = "Impostazioni salvate!";
     };
 
@@ -194,7 +216,7 @@
     document.getElementById("cameraInput").onchange = gestisciImmagine;
     document.getElementById("galleryInput").onchange = gestisciImmagine;
     document.getElementById("btnAnalizza").onclick = analizzaImmagine;
-    document.getElementById("btnSalvaTutto").onclick = function() { richiediTokenEsegui(inviaAGoogleCalendar, "btnSalvaTutto"); };
+    document.getElementById("btnSalvaTutto").onclick = function() { richiediTokenEsegui(sincronizzaTutto, "btnSalvaTutto"); };
     document.getElementById("btnSvuotaArchivio").onclick = svuotaArchivio;
 
     document.getElementById("notesCameraInput").onchange = aggiungiPagineAppunti;
@@ -345,7 +367,7 @@
     tokenClient.requestAccessToken();
   }
 
-  // ==================== LOGICA AGENDA ====================
+  // ==================== LOGICA AGENDA & TASKS ====================
   async function gestisciImmagine(event) {
     var file = event.target.files[0];
     if (!file) return;
@@ -354,7 +376,7 @@
     document.getElementById("preview").src = res.dataUrl;
     document.getElementById("preview").style.display = "block";
     document.getElementById("btnAnalizza").style.display = "block";
-    document.getElementById("status").innerText = "Foto pronta. Premi Leggi Appuntamenti.";
+    document.getElementById("status").innerText = "Foto pronta. Premi Leggi Appuntamenti & Obiettivi.";
     base64Image = res.base64;
     event.target.value = "";
   }
@@ -376,15 +398,17 @@
 
     var prompt = "Analizza questa foto di un planner digitale e-ink (versione 2026 o 2027). Ignora eventuali tracce sbiadite (ghosting) della pagina precedente sullo sfondo e i menu laterali/superiori.\n" +
       "Stabilisci prima il TIPO DI VISTA guardando in alto a sinistra:\n" +
-      "- CASO A (tipo_vista: 'settimanale'): se in alto a sinistra ce 'Settimana XX' e un intervallo di date (es. 23 Nov - 29 Nov 2026 oppure 07 Jun - 13 Jun 2027) per determinare l'anno esatto (2026 o 2027). La pagina ha 7 riquadri dei giorni: colonna sinistra (LUNEDI, MERCOLEDI, VENERDI, DOMENICA) e colonna destra (MARTEDI, GIOVEDI, SABATO). Ignora il riquadro 'OBIETTIVI SETTIMANALI' (sia se in basso a destra sia se affiancato a DOMENICA). Estrai tutti gli appuntamenti scritti a mano nei 7 giorni con categoria 'programma'.\n" +
-      "- CASO B (tipo_vista: 'giornaliera'): se in alto a sinistra ce il nome di un singolo giorno e la data completa (es. 'Martedi - 24 Novembre 2026' o 'Martedi - 8 Giugno 2027'). La pagina ha 4 sezioni:\n" +
+      "- CASO A (tipo_vista: 'settimanale'): se in alto a sinistra ce 'Settimana XX' e un intervallo di date (es. 23 Nov - 29 Nov 2026 oppure 07 Jun - 13 Jun 2027) per determinare l'anno esatto (2026 o 2027).\n" +
+      "  1) Estrai tutti gli appuntamenti scritti a mano nei 7 riquadri dei giorni (LUNEDI, MARTEDI, MERCOLEDI, GIOVEDI, VENERDI, SABATO, DOMENICA) con categoria 'programma'.\n" +
+      "  2) Guarda il riquadro 'OBIETTIVI SETTIMANALI' (in basso a destra, affiancato a DOMENICA): estrai ogni riga scritta a mano NON ancora spuntata/barrata nell'array 'obiettivi_settimanali' (come array di stringhe) e indica in 'data_domenica' la data YYYY-MM-DD della domenica di quella settimana.\n" +
+      "- CASO B (tipo_vista: 'giornaliera'): se in alto a sinistra ce il nome di un singolo giorno e la data completa (es. 'Martedi - 24 Novembre 2026'). La pagina ha 4 sezioni:\n" +
       "  1) 'PROGRAMMA' (a sinistra, griglia oraria 07:00-21:00): estrai ogni appuntamento scritto (categoria: 'programma'). Se e scritto un orario a mano accanto al testo (es. 8.30), usa quello; altrimenti usa l'ora della riga stampata su cui si trova. Se manca l'ora di fine, aggiungi 1 ora.\n" +
       "  2) 'PERSONALE' (a destra al centro): estrai ogni impegno privato scritto qui (categoria: 'personale'). Se ha un orario usa tutto_il_giorno: false, altrimenti true.\n" +
       "  3) 'PRIORITA' (a destra in alto con caselle di spunta): estrai SOLO le righe NON spuntate (ignora quelle con spunta/crocetta), con categoria: 'priorita' e tutto_il_giorno: true.\n" +
-      "  4) 'NOTE' (a destra in basso): trascrivi eventuale testo scritto a mano nel campo 'note_giorno' (stringa unica, vuota se non ce nulla).\n" +
-      "Regole generali: date in formato YYYY-MM-DD, orari in HH:MM. Se non ce orario imposta tutto_il_giorno: true. Se non ci sono appuntamenti scritti a mano, restituisci eventi: [].\n" +
+      "  4) 'NOTE' (a destra in basso): trascrivi eventuale testo scritto a mano nel campo 'note_giorno' (stringa unica, vuota se non ce nulla). Lascia obiettivi_settimanali: [].\n" +
+      "Regole generali: date in formato YYYY-MM-DD, orari in HH:MM. Se non ce orario imposta tutto_il_giorno: true.\n" +
       "Restituisci un oggetto JSON con questa struttura esatta: " +
-      '{"tipo_vista":"settimanale","intestazione":"Settimana XX - Anno YYYY","note_giorno":"","eventi":[{"data":"YYYY-MM-DD","giorno":"LUNEDI","titolo":"Testo","categoria":"programma","ora_inizio":"09:00","ora_fine":"10:00","tutto_il_giorno":false}]}';
+      '{"tipo_vista":"settimanale","intestazione":"Settimana XX - Anno YYYY","data_domenica":"YYYY-MM-DD","note_giorno":"","obiettivi_settimanali":["Obiettivo 1"],"eventi":[{"data":"YYYY-MM-DD","giorno":"LUNEDI","titolo":"Testo","categoria":"programma","ora_inizio":"09:00","ora_fine":"10:00","tutto_il_giorno":false}]}';
 
     try {
       var rawText = await chiamaGemini(apiKey, prompt, [base64Image], status, 30000, true);
@@ -405,6 +429,10 @@
         boxNote.style.display = "none";
       }
 
+      obiettiviSettimanali = Array.isArray(risultato.obiettivi_settimanali) ? risultato.obiettivi_settimanali.filter(function(o) { return (o || "").trim() !== ""; }) : [];
+      dataScadenzaObiettivi = risultato.data_domenica || "";
+      renderizzaObiettivi();
+
       eventiEstratti = (risultato.eventi || []).map(function(ev) {
         if (ev.categoria === "personale" && ev.titolo && ev.titolo.indexOf("[Personale]") === -1) {
           ev.titolo = "[Personale] " + ev.titolo;
@@ -413,7 +441,7 @@
       });
 
       renderizzaEventi();
-      status.innerText = "✅ Trovati " + eventiEstratti.length + " elementi (" + (isGiornaliera ? "giorno" : "settimana") + ") in " + secondi + "s.";
+      status.innerText = "✅ Trovati " + eventiEstratti.length + " eventi e " + obiettiviSettimanali.length + " obiettivi in " + secondi + "s.";
     } catch (err) {
       clearInterval(timerVisivo);
       status.innerText = "❌ Errore: " + err.message;
@@ -422,11 +450,37 @@
     }
   }
 
+  function renderizzaObiettivi() {
+    var box = document.getElementById("boxObiettiviSettimanali");
+    var lista = document.getElementById("listaObiettivi");
+    var lblScad = document.getElementById("labelScadenzaTasks");
+
+    if (obiettiviSettimanali.length === 0) {
+      box.style.display = "none";
+      lista.innerHTML = "";
+      return;
+    }
+
+    lblScad.innerText = dataScadenzaObiettivi ? ("Scad. " + dataScadenzaObiettivi) : "";
+    lista.innerHTML = obiettiviSettimanali.map(function(ob, idx) {
+      return '<div class="task-row">' +
+        '<input type="text" value="' + (ob || "").replace(/"/g, '&quot;') + '" onchange="obiettiviSettimanali[' + idx + '] = this.value">' +
+        '<button type="button" class="danger" onclick="rimuoviObiettivo(' + idx + ')">✕</button>' +
+      '</div>';
+    }).join("");
+    box.style.display = "block";
+  }
+
+  function rimuoviObiettivo(idx) {
+    obiettiviSettimanali.splice(idx, 1);
+    renderizzaObiettivi();
+  }
+
   function renderizzaEventi() {
     var container = document.getElementById("listaEventi");
     container.innerHTML = "";
     if (eventiEstratti.length === 0) {
-      container.innerHTML = "<p>Nessun appuntamento o priorità rilevata in questa pagina.</p>";
+      container.innerHTML = "<p>Nessun appuntamento rilevato nei riquadri giornalieri.</p>";
     }
     eventiEstratti.forEach(function(ev, idx) {
       var cat = ev.categoria || (ev.tutto_il_giorno ? "scadenza" : "programma");
@@ -465,13 +519,49 @@
     renderizzaEventi();
   }
 
-  function normalizzaTesto(str) {
-    return (str || "").replace(/^\[personale\]\s*/i, "").toLowerCase().trim().replace(/\s+/g, " ");
+  // ==================== ANTI-DUPLICATI INTELLIGENTE ====================
+  function estraiParoleChiave(str) {
+    return (str || "")
+      .replace(/^\[personale\]\s*/i, "")
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(function(w) { return w.length > 2; });
+  }
+
+  function titoliSimili(titoloA, titoloB) {
+    var normA = (titoloA || "").replace(/^\[personale\]\s*/i, "").toLowerCase().trim();
+    var normB = (titoloB || "").replace(/^\[personale\]\s*/i, "").toLowerCase().trim();
+    if (!normA || !normB) return false;
+    if (normA === normB || normA.indexOf(normB) !== -1 || normB.indexOf(normA) !== -1) return true;
+
+    var wA = estraiParoleChiave(normA);
+    var wB = estraiParoleChiave(normB);
+    if (wA.length === 0 || wB.length === 0) return false;
+
+    var comuni = 0;
+    for (var i = 0; i < wA.length; i++) {
+      if (wB.indexOf(wA[i]) !== -1) comuni++;
+    }
+    var minLen = Math.min(wA.length, wB.length);
+    return (comuni / minLen) >= 0.7;
+  }
+
+  function spostaGiorni(dataStr, delta) {
+    var parts = dataStr.split("-");
+    var d = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)));
+    d.setUTCDate(d.getUTCDate() + delta);
+    return d.toISOString().split("T")[0];
   }
 
   async function eventoGiaPresente(ev) {
-    var timeMin = encodeURIComponent(ev.data + "T00:00:00Z");
-    var timeMax = encodeURIComponent(ev.data + "T23:59:59Z");
+    // Finestra ampia per coprire fuso orario locale Europe/Rome senza tagliare eventi ai bordi
+    var giornoPrima = spostaGiorni(ev.data, -1);
+    var giornoDopo = spostaGiorni(ev.data, 1);
+    var timeMin = encodeURIComponent(giornoPrima + "T21:00:00Z");
+    var timeMax = encodeURIComponent(giornoDopo + "T03:00:00Z");
     var url = "https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=" + timeMin + "&timeMax=" + timeMax + "&singleEvents=true";
 
     var res = await fetch(url, { headers: { "Authorization": "Bearer " + accessToken } });
@@ -479,17 +569,122 @@
 
     var data = await res.json();
     var items = data.items || [];
-    var titoloNuovo = normalizzaTesto(ev.titolo);
 
     for (var i = 0; i < items.length; i++) {
-      if (normalizzaTesto(items[i].summary) === titoloNuovo) return true;
+      var item = items[i];
+      var itemData = "";
+      var itemOra = "";
+
+      if (item.start && item.start.date) {
+        itemData = item.start.date;
+      } else if (item.start && item.start.dateTime) {
+        itemData = item.start.dateTime.slice(0, 10);
+        itemOra = item.start.dateTime.slice(11, 16);
+      }
+
+      if (itemData !== ev.data) continue;
+
+      // 1) Controllo somiglianza testo (anche se trascritto leggermente diverso)
+      if (titoliSimili(item.summary, ev.titolo)) return true;
+
+      // 2) Se è un evento con orario e sullo stesso giorno c'è già un appuntamento identico alla stessa ora
+      if (!ev.tutto_il_giorno && itemOra && itemOra === ev.ora_inizio && titoliSimili(item.summary, ev.titolo)) {
+        return true;
+      }
     }
     return false;
   }
 
-  async function inviaAGoogleCalendar() {
+  // ==================== GOOGLE TASKS (OBIETTIVI SETTIMANALI) ====================
+  async function ottieniOCreaTaskList(nomeLista) {
+    var res = await fetch("https://tasks.googleapis.com/tasks/v1/users/@me/lists", {
+      headers: { "Authorization": "Bearer " + accessToken }
+    });
+    if (!res.ok) {
+      throw new Error("Impossibile accedere a Google Tasks (" + res.status + "). Verifica di aver abilitato Google Tasks API su Google Cloud.");
+    }
+    var data = await res.json();
+    var lists = data.items || [];
+    for (var i = 0; i < lists.length; i++) {
+      if ((lists[i].title || "").toLowerCase().trim() === nomeLista.toLowerCase().trim()) {
+        return lists[i].id;
+      }
+    }
+
+    var createRes = await fetch("https://tasks.googleapis.com/tasks/v1/users/@me/lists", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + accessToken,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ title: nomeLista })
+    });
+    if (!createRes.ok) throw new Error("Impossibile creare la lista Google Tasks (" + createRes.status + ")");
+    var nuovaLista = await createRes.json();
+    return nuovaLista.id;
+  }
+
+  async function inviaObiettiviAGoogleTasks(status) {
+    var validi = obiettiviSettimanali.map(function(o) { return (o || "").trim(); }).filter(function(o) { return o !== ""; });
+    if (validi.length === 0) return { aggiunti: 0, saltati: 0 };
+
+    var nomeLista = document.getElementById("tasksListName").value.trim() || "Obiettivi Settimanali";
+    status.innerText = "Sincronizzazione Obiettivi con Google Tasks ('" + nomeLista + "')...";
+    var listId = await ottieniOCreaTaskList(nomeLista);
+
+    // Leggi i task esistenti non completati per evitare duplicati
+    var existingRes = await fetch("https://tasks.googleapis.com/tasks/v1/lists/" + encodeURIComponent(listId) + "/tasks?showCompleted=false", {
+      headers: { "Authorization": "Bearer " + accessToken }
+    });
+    var existingTasks = [];
+    if (existingRes.ok) {
+      var existingData = await existingRes.json();
+      existingTasks = existingData.items || [];
+    }
+
+    var aggiunti = 0;
+    var saltati = 0;
+    var intestazione = document.getElementById("titoloSettimana").innerText || "";
+
+    for (var i = 0; i < validi.length; i++) {
+      var testoOb = validi[i];
+      var duplicato = false;
+      for (var j = 0; j < existingTasks.length; j++) {
+        if (titoliSimili(existingTasks[j].title, testoOb)) {
+          duplicato = true;
+          break;
+        }
+      }
+      if (duplicato) {
+        saltati++;
+        continue;
+      }
+
+      var taskBody = {
+        title: testoOb,
+        notes: intestazione ? ("Importato da Planner (" + intestazione + ")") : "Importato da Planner"
+      };
+      if (dataScadenzaObiettivi) {
+        taskBody.due = dataScadenzaObiettivi + "T00:00:00.000Z";
+      }
+
+      var insRes = await fetch("https://tasks.googleapis.com/tasks/v1/lists/" + encodeURIComponent(listId) + "/tasks", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + accessToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(taskBody)
+      });
+      if (insRes.ok) aggiunti++;
+    }
+
+    return { aggiunti: aggiunti, saltati: saltati };
+  }
+
+  async function sincronizzaTutto() {
     var status = document.getElementById("status");
-    status.innerText = "Controllo duplicati e sincronizzazione con Google Calendar...";
+    status.innerText = "Controllo duplicati e sincronizzazione...";
     var inseriti = 0;
     var saltati = 0;
     var archivio = JSON.parse(leggiStorage("archivio_agenda", "[]"));
@@ -497,7 +692,7 @@
 
     for (var i = 0; i < eventiEstratti.length; i++) {
       var ev = eventiEstratti[i];
-      status.innerText = "Verifica (" + (i + 1) + "/" + eventiEstratti.length + "): " + ev.titolo + "...";
+      status.innerText = "Verifica evento (" + (i + 1) + "/" + eventiEstratti.length + "): " + ev.titolo + "...";
 
       if (await eventoGiaPresente(ev)) {
         saltati++;
@@ -508,10 +703,8 @@
       if (noteAttuali) bodyEvento.description = "Note del giorno:\n" + noteAttuali;
 
       if (ev.tutto_il_giorno) {
-        var d = new Date(ev.data);
-        d.setDate(d.getDate() + 1);
         bodyEvento.start = { date: ev.data };
-        bodyEvento.end = { date: d.toISOString().split("T")[0] };
+        bodyEvento.end = { date: spostaGiorni(ev.data, 1) };
       } else {
         bodyEvento.start = { dateTime: ev.data + "T" + ev.ora_inizio + ":00", timeZone: "Europe/Rome" };
         bodyEvento.end = { dateTime: ev.data + "T" + ev.ora_fine + ":00", timeZone: "Europe/Rome" };
@@ -532,9 +725,13 @@
     scriviStorage("archivio_agenda", JSON.stringify(archivio));
     mostraArchivio();
 
-    var msgFinale = "🎉 Fatto! " + inseriti + " nuovi eventi aggiunti";
-    if (saltati > 0) msgFinale += " (" + saltati + " già presenti saltati)";
-    status.innerText = msgFinale + ".";
+    var esitoTasks = await inviaObiettiviAGoogleTasks(status);
+
+    var partiMsg = ["🎉 Calendar: +" + inseriti + " nuovi" + (saltati > 0 ? " (" + saltati + " duplicati saltati)" : "")];
+    if (esitoTasks.aggiunti > 0 || esitoTasks.saltati > 0) {
+      partiMsg.push("Tasks: +" + esitoTasks.aggiunti + " obiettivi" + (esitoTasks.saltati > 0 ? " (" + esitoTasks.saltati + " già presenti)" : ""));
+    }
+    status.innerText = partiMsg.join(" | ") + ".";
     document.getElementById("risultatiCard").style.display = "none";
   }
 
